@@ -1,0 +1,4 @@
+---
+test_id: "{{ tiny_prefix }}"
+image_name: "test-sm-image-{{ test_id }}"
+image_role_name: "ansible-test-sagemaker-image-role-{{ test_id }}"
