@@ -258,7 +258,9 @@ def update_image(client, module: AnsibleAWSModule, existing: Dict[str, Any]) -> 
     purge_tags: bool = module.params["purge_tags"]
     tags_to_set: Dict[str, str]
     tags_to_remove: List[str]
-    tags_to_set, tags_to_remove = compare_aws_tags(current_tags, new_tags or {}, purge_tags if new_tags is not None else False)
+    tags_to_set, tags_to_remove = compare_aws_tags(
+        current_tags, new_tags or {}, purge_tags if new_tags is not None else False
+    )
 
     if not properties_to_update and not properties_to_delete and not tags_to_set and not tags_to_remove:
         return False, f"SageMaker Image {image_name} is already up to date."
