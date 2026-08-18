@@ -289,17 +289,17 @@ def delete_image(client, module: AnsibleAWSModule, existing: Dict[str, Any]) -> 
 
 
 def main():
-    argument_spec = dict(
-        state=dict(type="str", default="present", choices=["present", "absent"]),
-        image_name=dict(type="str", required=True),
-        display_name=dict(type="str"),
-        description=dict(type="str"),
-        role_arn=dict(type="str"),
-        tags=dict(type="dict", aliases=["resource_tags"]),
-        purge_tags=dict(type="bool", default=True),
-        wait=dict(type="bool", default=True),
-        wait_timeout=dict(type="int", default=600),
-    )
+    argument_spec = {
+        "state": {"type": "str", "default": "present", "choices": ["present", "absent"]},
+        "image_name": {"type": "str", "required": True},
+        "display_name": {"type": "str"},
+        "description": {"type": "str"},
+        "role_arn": {"type": "str"},
+        "tags": {"type": "dict", "aliases": ["resource_tags"]},
+        "purge_tags": {"type": "bool", "default": True},
+        "wait": {"type": "bool", "default": True},
+        "wait_timeout": {"type": "int", "default": 600},
+    }
 
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
@@ -316,7 +316,7 @@ def main():
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
     changed: bool = False
-    result: Dict[str, Any] = dict(image={})
+    result: Dict[str, Any] = {"image": {}}
     existing: Optional[Dict[str, Any]] = describe_image(client, image_name)
 
     try:
