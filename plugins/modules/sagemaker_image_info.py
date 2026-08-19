@@ -141,9 +141,7 @@ def find_images(client, module: AnsibleAWSModule) -> List[Dict[str, Any]]:
 
     if image_name:
         image = describe_image(client, image_name)
-        if image is None:
-            module.fail_json(msg=f"SageMaker Image '{image_name}' does not exist.")
-        return [image]
+        return [image] if image else []
 
     params: Dict[str, Any] = scrub_none_parameters(
         {

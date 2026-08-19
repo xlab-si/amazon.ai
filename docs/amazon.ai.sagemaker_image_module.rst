@@ -364,7 +364,7 @@ Parameters
                         </ul>
                 </td>
                 <td>
-                        <div>Whether to wait for the create, update, or delete operation to complete.</div>
+                        <div>Whether to wait for the create or update operation to complete.</div>
                 </td>
             </tr>
             <tr>

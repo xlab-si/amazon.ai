@@ -228,7 +228,7 @@ def _build_update_params(module: AnsibleAWSModule, existing: Dict[str, Any]) -> 
     clears a field that is currently set.
     """
     properties_to_update: Dict[str, Any] = {}
-    properties_to_delete: List[str] = []
+    properties_to_remove: List[str] = []
 
     for option, aws_field in (("display_name", "DisplayName"), ("description", "Description")):
         new_value: Optional[str] = module.params.get(option)
@@ -236,7 +236,7 @@ def _build_update_params(module: AnsibleAWSModule, existing: Dict[str, Any]) -> 
             continue
         current_value: str = existing.get(aws_field, "")
         if new_value == "" and current_value != "":
-            properties_to_delete.append(aws_field)
+            properties_to_remove.append(aws_field)
         elif new_value != current_value:
             properties_to_update[aws_field] = new_value
 
@@ -244,32 +244,31 @@ def _build_update_params(module: AnsibleAWSModule, existing: Dict[str, Any]) -> 
     if role_arn and role_arn != existing.get("RoleArn"):
         properties_to_update["RoleArn"] = role_arn
 
-    return properties_to_update, properties_to_delete
+    return properties_to_update, properties_to_remove
 
 
 def update_image(client, module: AnsibleAWSModule, existing: Dict[str, Any]) -> Tuple[bool, str]:
     image_name: str = existing["ImageName"]
     properties_to_update: Dict[str, Any]
-    properties_to_delete: List[str]
-    properties_to_update, properties_to_delete = _build_update_params(module, existing)
+    properties_to_remove: List[str]
+    properties_to_update, properties_to_remove = _build_update_params(module, existing)
 
-    current_tags: Dict[str, str] = list_tags(client, existing["ImageArn"])
     new_tags: Optional[Dict[str, str]] = module.params.get("tags")
-    purge_tags: bool = module.params["purge_tags"]
-    tags_to_set: Dict[str, str]
-    tags_to_remove: List[str]
-    tags_to_set, tags_to_remove = compare_aws_tags(
-        current_tags, new_tags or {}, purge_tags if new_tags is not None else False
-    )
+    tags_to_set: Dict[str, str] = {}
+    tags_to_remove: List[str] = []
+    if new_tags is not None:
+        current_tags: Dict[str, str] = list_tags(client, existing["ImageArn"])
+        purge_tags: bool = module.params["purge_tags"]
+        tags_to_set, tags_to_remove = compare_aws_tags(current_tags, new_tags, purge_tags)
 
-    if not properties_to_update and not properties_to_delete and not tags_to_set and not tags_to_remove:
+    if not properties_to_update and not properties_to_remove and not tags_to_set and not tags_to_remove:
         return False, f"SageMaker Image {image_name} is already up to date."
 
     if module.check_mode:
         return True, f"Check mode: would have updated SageMaker Image {image_name}."
 
-    if properties_to_update or properties_to_delete:
-        client.update_image(ImageName=image_name, DeleteProperties=properties_to_delete, **properties_to_update)
+    if properties_to_update or properties_to_remove:
+        client.update_image(ImageName=image_name, DeleteProperties=properties_to_remove, **properties_to_update)
         _wait_for_image_status(client, module, image_name, "image_updated")
 
     if tags_to_set:
