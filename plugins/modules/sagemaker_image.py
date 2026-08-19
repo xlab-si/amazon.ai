@@ -107,7 +107,7 @@ RETURN = r"""
 image:
     description: A dictionary containing the detailed configuration of the managed SageMaker Image.
     type: dict
-    returned: always
+    returned: on success when state is present.
     contains:
         image_arn:
             description: The Amazon Resource Name (ARN) of the image.
@@ -291,17 +291,17 @@ def delete_image(client, module: AnsibleAWSModule, existing: Dict[str, Any]) -> 
 
 
 def main():
-    argument_spec = {
-        "state": {"type": "str", "default": "present", "choices": ["present", "absent"]},
-        "image_name": {"type": "str", "required": True},
-        "display_name": {"type": "str"},
-        "description": {"type": "str"},
-        "role_arn": {"type": "str"},
-        "tags": {"type": "dict", "aliases": ["resource_tags"]},
-        "purge_tags": {"type": "bool", "default": True},
-        "wait": {"type": "bool", "default": True},
-        "wait_timeout": {"type": "int", "default": 600},
-    }
+    argument_spec = dict(
+        state=dict(type="str", default="present", choices=["present", "absent"]),
+        image_name=dict(type="str", required=True),
+        display_name=dict(type="str"),
+        description=dict(type="str"),
+        role_arn=dict(type="str"),
+        tags=dict(type="dict", aliases=["resource_tags"]),
+        purge_tags=dict(type="bool", default=True),
+        wait=dict(type="bool", default=True),
+        wait_timeout=dict(type="int", default=600),
+    )
 
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
@@ -319,9 +319,10 @@ def main():
 
     changed: bool = False
     result: Dict[str, Any] = {"image": {}}
-    existing: Optional[Dict[str, Any]] = describe_image(client, image_name)
 
     try:
+        existing: Optional[Dict[str, Any]] = describe_image(client, image_name)
+
         if state == "present":
             if existing:
                 changed, msg = update_image(client, module, existing)

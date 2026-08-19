@@ -160,16 +160,16 @@ def find_images(client, module: AnsibleAWSModule) -> List[Dict[str, Any]]:
 
 
 def main():
-    argument_spec = {
-        "image_name": {"type": "str"},
-        "name_contains": {"type": "str"},
-        "creation_time_after": {"type": "str"},
-        "creation_time_before": {"type": "str"},
-        "last_modified_time_after": {"type": "str"},
-        "last_modified_time_before": {"type": "str"},
-        "sort_by": {"type": "str", "choices": ["CREATION_TIME", "LAST_MODIFIED_TIME", "IMAGE_NAME"]},
-        "sort_order": {"type": "str", "choices": ["ASCENDING", "DESCENDING"]},
-    }
+    argument_spec = dict(
+        image_name=dict(type="str"),
+        name_contains=dict(type="str"),
+        creation_time_after=dict(type="str"),
+        creation_time_before=dict(type="str"),
+        last_modified_time_after=dict(type="str"),
+        last_modified_time_before=dict(type="str"),
+        sort_by=dict(type="str", choices=["CREATION_TIME", "LAST_MODIFIED_TIME", "IMAGE_NAME"]),
+        sort_order=dict(type="str", choices=["ASCENDING", "DESCENDING"]),
+    )
 
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
