@@ -396,6 +396,14 @@ Notes
    - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials and other settings, such as the region, from its configuration files in the Ansible 'host' context (typically ``~/.aws/credentials``). See https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html for more information.
 
 
+See Also
+--------
+
+.. seealso::
+
+   :ref:`amazon.ai.sagemaker_image_info_module`
+       Use the info module to list SageMaker Images or retrieve details for one image.
+
 
 Examples
 --------

@@ -106,6 +106,7 @@ Parameters
                 </td>
                 <td>
                         <div>Only include images created after the specified time, in ISO 8601 format.</div>
+                        <div>Mutually exclusive with O(image_name).</div>
                 </td>
             </tr>
             <tr>
@@ -121,6 +122,7 @@ Parameters
                 </td>
                 <td>
                         <div>Only include images created before the specified time, in ISO 8601 format.</div>
+                        <div>Mutually exclusive with O(image_name).</div>
                 </td>
             </tr>
             <tr>
@@ -173,8 +175,8 @@ Parameters
                 </td>
                 <td>
                         <div>The name of the SageMaker Image to retrieve.</div>
-                        <div>If not provided, the module will list images, optionally filtered by the other options.</div>
-                        <div>Mutually exclusive with all other options.</div>
+                        <div>If not provided, images are listed, optionally filtered by O(name_contains), O(creation_time_after), and other filter options.</div>
+                        <div>Mutually exclusive with O(name_contains), O(creation_time_after), O(creation_time_before), O(last_modified_time_after), O(last_modified_time_before), O(sort_by), and O(sort_order).</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: name</div>
                 </td>
             </tr>
@@ -191,6 +193,7 @@ Parameters
                 </td>
                 <td>
                         <div>Only include images last modified after the specified time, in ISO 8601 format.</div>
+                        <div>Mutually exclusive with O(image_name).</div>
                 </td>
             </tr>
             <tr>
@@ -206,6 +209,7 @@ Parameters
                 </td>
                 <td>
                         <div>Only include images last modified before the specified time, in ISO 8601 format.</div>
+                        <div>Mutually exclusive with O(image_name).</div>
                 </td>
             </tr>
             <tr>
@@ -222,6 +226,7 @@ Parameters
                 <td>
                         <div>A string in the image name.</div>
                         <div>This filter returns only images whose name contains the specified string.</div>
+                        <div>Mutually exclusive with O(image_name).</div>
                 </td>
             </tr>
             <tr>
@@ -319,6 +324,7 @@ Parameters
                 </td>
                 <td>
                         <div>The field to sort results by.</div>
+                        <div>Mutually exclusive with O(image_name).</div>
                 </td>
             </tr>
             <tr>
@@ -338,6 +344,7 @@ Parameters
                 </td>
                 <td>
                         <div>The sort order for results.</div>
+                        <div>Mutually exclusive with O(image_name).</div>
                 </td>
             </tr>
             <tr>
@@ -371,6 +378,14 @@ Notes
    - **Caution:** For modules, environment variables and configuration files are read from the Ansible 'host' context and not the 'controller' context. As such, files may need to be explicitly copied to the 'host'.  For lookup and connection plugins, environment variables and configuration files are read from the Ansible 'controller' context and not the 'host' context.
    - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials and other settings, such as the region, from its configuration files in the Ansible 'host' context (typically ``~/.aws/credentials``). See https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html for more information.
 
+
+See Also
+--------
+
+.. seealso::
+
+   :ref:`amazon.ai.sagemaker_image_module`
+       Use the resource module to create, update, or delete SageMaker Images.
 
 
 Examples

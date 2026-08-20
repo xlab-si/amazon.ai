@@ -68,6 +68,9 @@ options:
             - The number of seconds to wait for the operation to complete when O(wait=true).
         type: int
         default: 600
+seealso:
+    - module: amazon.ai.sagemaker_image_info
+      description: Use the info module to list SageMaker Images or retrieve details for one image.
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules

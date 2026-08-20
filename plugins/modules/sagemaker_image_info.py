@@ -18,40 +18,51 @@ options:
         description:
             - The name of the SageMaker Image to retrieve.
             - If not provided, images are listed, optionally filtered by O(name_contains), O(creation_time_after), and other filter options.
-            - Mutually exclusive with all other options.
+            - Mutually exclusive with O(name_contains), O(creation_time_after), O(creation_time_before),
+              O(last_modified_time_after), O(last_modified_time_before), O(sort_by), and O(sort_order).
         type: str
         aliases: ["name"]
     name_contains:
         description:
             - A string in the image name.
             - This filter returns only images whose name contains the specified string.
+            - Mutually exclusive with O(image_name).
         type: str
     creation_time_after:
         description:
             - Only include images created after the specified time, in ISO 8601 format.
+            - Mutually exclusive with O(image_name).
         type: str
     creation_time_before:
         description:
             - Only include images created before the specified time, in ISO 8601 format.
+            - Mutually exclusive with O(image_name).
         type: str
     last_modified_time_after:
         description:
             - Only include images last modified after the specified time, in ISO 8601 format.
+            - Mutually exclusive with O(image_name).
         type: str
     last_modified_time_before:
         description:
             - Only include images last modified before the specified time, in ISO 8601 format.
+            - Mutually exclusive with O(image_name).
         type: str
     sort_by:
         description:
             - The field to sort results by.
+            - Mutually exclusive with O(image_name).
         type: str
         choices: ['CREATION_TIME', 'LAST_MODIFIED_TIME', 'IMAGE_NAME']
     sort_order:
         description:
             - The sort order for results.
+            - Mutually exclusive with O(image_name).
         type: str
         choices: ['ASCENDING', 'DESCENDING']
+seealso:
+    - module: amazon.ai.sagemaker_image
+      description: Use the resource module to create, update, or delete SageMaker Images.
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
