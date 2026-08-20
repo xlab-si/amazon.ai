@@ -200,6 +200,10 @@ def _wait_for_image_deletion(
             image = describe_image(client, image_name)
             if image is None:
                 return
+            elif image.get("ImageStatus") == "DELETE_FAILED":
+                module.fail_json(
+                    msg=f"SageMaker Image {image_name} entered DELETE_FAILED state.",
+                )
         except (
             is_boto3_error_code("ResourceNotFound"),
             is_boto3_error_code("ResourceNotFoundException"),
