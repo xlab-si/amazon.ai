@@ -70,12 +70,12 @@
       amazon.ai.sagemaker_image_info:
         image_name: "{{ image_name }}"
       register: image_info_absent
-      ignore_errors: true
 
     - name: Assert image is absent after check_mode create
       ansible.builtin.assert:
         that:
-          - image_info_absent.failed
+          - not image_info_absent.failed
+          - image_info_absent.images | length == 0
 
     # -------------------------------------------------------
     # CREATE — actual
@@ -130,19 +130,46 @@
           - "'role_arn' not in image_info.images[0]"
 
     # -------------------------------------------------------
+    # ALIAS — `name` alias for `image_name`
+    # -------------------------------------------------------
+    - name: Get info about the created image using the name alias
+      amazon.ai.sagemaker_image_info:
+        name: "{{ image_name }}"
+      register: image_info_by_alias
+
+    - name: Assert name alias returns the same image as image_name
+      ansible.builtin.assert:
+        that:
+          - image_info_by_alias.images | length == 1
+          - image_info_by_alias.images[0].image_arn == image_info.images[0].image_arn
+
+    - name: Re-run create using the name alias (idempotency)
+      amazon.ai.sagemaker_image:
+        state: present
+        name: "{{ image_name }}"
+        role_arn: "{{ image_role_arn }}"
+        wait_timeout: 120
+      register: image_create_by_alias
+
+    - name: Assert name alias resolves to the same resource and stays idempotent
+      ansible.builtin.assert:
+        that:
+          - not image_create_by_alias.changed
+          - image_create_by_alias.image.image_arn == image_info.images[0].image_arn
+
+    # -------------------------------------------------------
     # INFO — image that does not exist
     # -------------------------------------------------------
     - name: Get info about a non-existent image
       amazon.ai.sagemaker_image_info:
         image_name: "does-not-exist-{{ test_id }}"
       register: image_info_missing
-      ignore_errors: true
 
-    - name: Assert missing image fails with a clear message
+    - name: Assert missing image is non-fatal and returns an empty list
       ansible.builtin.assert:
         that:
-          - image_info_missing.failed
-          - "'does-not-exist' in image_info_missing.msg"
+          - not image_info_missing.failed
+          - image_info_missing.images == []
 
     # -------------------------------------------------------
     # INFO — list with name_contains filter
@@ -397,12 +424,12 @@
       amazon.ai.sagemaker_image_info:
         image_name: "{{ image_name }}"
       register: image_info_deleted
-      ignore_errors: true
 
     - name: Assert image no longer found
       ansible.builtin.assert:
         that:
-          - image_info_deleted.failed
+          - not image_info_deleted.failed
+          - image_info_deleted.images | length == 0
 
     # -------------------------------------------------------
     # DELETE — rerun (idempotency)

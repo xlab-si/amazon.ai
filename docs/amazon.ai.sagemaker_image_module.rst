@@ -178,6 +178,7 @@ Parameters
                 <td>
                         <div>The name of the image to manage.</div>
                         <div>This value cannot be modified after the image is created; a changed name is treated as a different resource.</div>
+                        <div style="font-size: small; color: darkgreen"><br/>aliases: name</div>
                 </td>
             </tr>
             <tr>
@@ -364,7 +365,7 @@ Parameters
                         </ul>
                 </td>
                 <td>
-                        <div>Whether to wait for the create or update operation to complete.</div>
+                        <div>Whether to wait for the create, update, or delete operation to complete.</div>
                 </td>
             </tr>
             <tr>
@@ -450,7 +451,7 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                       <span style="color: purple">dictionary</span>
                     </div>
                 </td>
-                <td>always</td>
+                <td>on success when state is present.</td>
                 <td>
                             <div>A dictionary containing the detailed configuration of the managed SageMaker Image.</div>
                     <br/>

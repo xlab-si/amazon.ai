@@ -175,6 +175,7 @@ Parameters
                         <div>The name of the SageMaker Image to retrieve.</div>
                         <div>If not provided, the module will list images, optionally filtered by the other options.</div>
                         <div>Mutually exclusive with all other options.</div>
+                        <div style="font-size: small; color: darkgreen"><br/>aliases: name</div>
                 </td>
             </tr>
             <tr>

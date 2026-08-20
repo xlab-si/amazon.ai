@@ -28,6 +28,7 @@ options:
               treated as a different resource.
         type: str
         required: true
+        aliases: ["name"]
     display_name:
         description:
             - The display name of the image.
@@ -59,7 +60,7 @@ options:
         default: true
     wait:
         description:
-            - Whether to wait for the create or update operation to complete.
+            - Whether to wait for the create, update, or delete operation to complete.
         type: bool
         default: true
     wait_timeout:
@@ -163,6 +164,7 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
+import time
 from typing import Any
 from typing import Dict
 from typing import List
@@ -174,11 +176,45 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_ta
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
+from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.tagging import ansible_dict_to_boto3_tag_list
 from ansible_collections.amazon.aws.plugins.module_utils.tagging import compare_aws_tags
+
+
+def _wait_for_image_deletion(
+    client,
+    module: AnsibleAWSModule,
+    image_name: str,
+    delay: int,
+    max_attempts: int,
+) -> None:
+    """Poll for the image to be deleted.
+
+    As of 2026-08-20 the built-in waiter does not work correctly. See https://github.com/boto/botocore/issues/3782.
+    """
+    for attempt in range(max_attempts):
+        try:
+            image = describe_image(client, image_name)
+            if image is None:
+                return
+        except (
+            is_boto3_error_code("ResourceNotFound"),
+            is_boto3_error_code("ResourceNotFoundException"),
+        ):
+            return
+
+        if attempt < max_attempts - 1:
+            time.sleep(delay)
+
+    module.fail_json(
+        msg=(
+            f"Timeout waiting for SageMaker Image {image_name} to be deleted. "
+            "The built-in waiter timed out and polling did not confirm deletion."
+        )
+    )
 
 
 def _wait_for_image_status(client, module: AnsibleAWSModule, image_name: str, waiter_name: str) -> None:
@@ -188,6 +224,10 @@ def _wait_for_image_status(client, module: AnsibleAWSModule, image_name: str, wa
     wait_timeout: int = module.params["wait_timeout"]
     delay = 15
     max_attempts = max(1, wait_timeout // delay)
+
+    if waiter_name == "image_deleted":
+        _wait_for_image_deletion(client, module, image_name, delay, max_attempts)
+        return
 
     try:
         client.get_waiter(waiter_name).wait(
@@ -286,13 +326,14 @@ def delete_image(client, module: AnsibleAWSModule, existing: Dict[str, Any]) -> 
         return True, f"Check mode: would have deleted SageMaker Image {image_name}."
 
     client.delete_image(ImageName=image_name)
+    _wait_for_image_status(client, module, image_name, "image_deleted")
     return True, f"SageMaker Image {image_name} deleted successfully."
 
 
 def main():
     argument_spec = dict(
         state=dict(type="str", default="present", choices=["present", "absent"]),
-        image_name=dict(type="str", required=True),
+        image_name=dict(type="str", required=True, aliases=["name"]),
         display_name=dict(type="str"),
         description=dict(type="str"),
         role_arn=dict(type="str"),
@@ -324,6 +365,13 @@ def main():
 
         if state == "present":
             if existing:
+                if existing.get("ImageStatus") == "DELETING":
+                    module.fail_json(
+                        msg=(
+                            f"SageMaker Image {image_name} is currently being deleted. "
+                            "Wait for deletion to complete before using state=present."
+                        )
+                    )
                 changed, msg = update_image(client, module, existing)
             else:
                 changed, msg = create_image(client, module)
@@ -338,7 +386,12 @@ def main():
 
         elif state == "absent":
             if existing:
-                changed, msg = delete_image(client, module, existing)
+                if existing.get("ImageStatus") == "DELETING":
+                    _wait_for_image_status(client, module, image_name, "image_deleted")
+                    changed = False
+                    msg = f"SageMaker Image {image_name} is already being deleted."
+                else:
+                    changed, msg = delete_image(client, module, existing)
             else:
                 msg = f"SageMaker Image {image_name} does not exist."
             result["msg"] = msg

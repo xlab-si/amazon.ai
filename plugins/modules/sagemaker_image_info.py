@@ -20,6 +20,7 @@ options:
             - If not provided, the module will list images, optionally filtered by the other options.
             - Mutually exclusive with all other options.
         type: str
+        aliases: ["name"]
     name_contains:
         description:
             - A string in the image name.
@@ -129,11 +130,22 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describ
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_images
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
+
+FILTER_OPTIONS = (
+    "name_contains",
+    "creation_time_after",
+    "creation_time_before",
+    "last_modified_time_after",
+    "last_modified_time_before",
+    "sort_by",
+    "sort_order",
+)
 
 
 def find_images(client, module: AnsibleAWSModule) -> List[Dict[str, Any]]:
@@ -143,23 +155,16 @@ def find_images(client, module: AnsibleAWSModule) -> List[Dict[str, Any]]:
         image = describe_image(client, image_name)
         return [image] if image else []
 
-    params: Dict[str, Any] = scrub_none_parameters(
-        {
-            "NameContains": module.params.get("name_contains"),
-            "CreationTimeAfter": module.params.get("creation_time_after"),
-            "CreationTimeBefore": module.params.get("creation_time_before"),
-            "LastModifiedTimeAfter": module.params.get("last_modified_time_after"),
-            "LastModifiedTimeBefore": module.params.get("last_modified_time_before"),
-            "SortBy": module.params.get("sort_by"),
-            "SortOrder": module.params.get("sort_order"),
-        }
+    params: Dict[str, Any] = snake_dict_to_camel_dict(
+        scrub_none_parameters({option: module.params.get(option) for option in FILTER_OPTIONS}),
+        capitalize_first=True,
     )
     return list_images(client, **params)
 
 
 def main():
     argument_spec = dict(
-        image_name=dict(type="str"),
+        image_name=dict(type="str", aliases=["name"]),
         name_contains=dict(type="str"),
         creation_time_after=dict(type="str"),
         creation_time_before=dict(type="str"),
