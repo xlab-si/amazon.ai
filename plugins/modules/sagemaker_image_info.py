@@ -17,7 +17,7 @@ options:
     image_name:
         description:
             - The name of the SageMaker Image to retrieve.
-            - If not provided, the module will list images, optionally filtered by the other options.
+            - If not provided, images are listed, optionally filtered by O(name_contains), O(creation_time_after), and other filter options.
             - Mutually exclusive with all other options.
         type: str
         aliases: ["name"]
