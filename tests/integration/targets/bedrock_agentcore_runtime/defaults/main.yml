@@ -1,0 +1,9 @@
+---
+test_id: "{{ tiny_prefix }}"
+agent_runtime_name: "test_agentcore_runtime_{{ test_id }}"
+agent_runtime_role_name: "ansible-test-agentcore-runtime-role-{{ test_id }}"
+# Container image URI: use a public, minimal image for testing.
+# This needs to be verified to be publicly pullable before enabling the target.
+# Example: public.ecr.aws/docker/library/hello-world:latest
+container_uri: "public.ecr.aws/lambda/python:3.12"
+endpoint_name: "test-endpoint-{{ test_id }}"
