@@ -161,6 +161,58 @@ agent_runtimes:
                             description: Allowed OAuth scopes.
                             type: list
                             elements: str
+        filesystem_configurations:
+            description: The filesystem configurations for the runtime.
+            type: list
+            elements: dict
+            contains:
+                session_storage:
+                    description: The session storage configuration for the filesystem.
+                    type: dict
+                    contains:
+                        access_point_arn:
+                            description: The ARN of the session storage access point.
+                            type: str
+                        mount_path:
+                            description: The mount path for the session storage.
+                            type: str
+                s3_files_access_point:
+                    description: The S3 Files Access Point configuration for the filesystem.
+                    type: dict
+                    contains:
+                        access_point_arn:
+                            description: The ARN of the S3 Files Access Point.
+                            type: str
+                        mount_path:
+                            description: The mount path for the S3 Files Access Point.
+                            type: str
+                efs_access_point:
+                    description: The EFS Access Point configuration for the filesystem.
+                    type: dict
+                    contains:
+                        access_point_arn:
+                            description: The ARN of the EFS Access Point.
+                            type: str
+                        mount_path:
+                            description: The mount path for the EFS Access Point.
+                            type: str
+                capacity_provider_volume:
+                    description: The capacity provider volume configuration for the filesystem.
+                    type: dict
+                    contains:
+                        volume_name:
+                            description: The name of the capacity provider volume.
+                            type: str
+                        mount_path:
+                            description: The mount path for the capacity provider volume.
+                            type: str
+        capacity_provider_configuration:
+            description: The capacity provider configuration for the runtime.
+            type: dict
+            contains:
+                capacity_provider_arn:
+                    description: The ARN of the capacity provider.
+                    type: str
         created_at:
             description: The timestamp when the runtime was created.
             type: str

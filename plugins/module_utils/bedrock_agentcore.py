@@ -158,6 +158,18 @@ def _runtime_parameters(
                 allowed_scopes=module.params.get("authorizer_allowed_scopes"),
             )
         )
+    if module.params.get("capacity_provider_arn"):
+        params["capacity_provider_configuration"] = dict(capacity_provider_arn=module.params["capacity_provider_arn"])
+    if module.params.get("session_storage"):
+        params["file_system_configurations"] = [dict(session_storage=module.params["session_storage"])]
+    elif module.params.get("s3_files_access_point"):
+        params["file_system_configurations"] = [dict(s3_files_access_point=module.params["s3_files_access_point"])]
+    elif module.params.get("efs_access_point"):
+        params["file_system_configurations"] = [dict(efs_access_point=module.params["efs_access_point"])]
+    elif module.params.get("capacity_provider_volume"):
+        params["file_system_configurations"] = [
+            dict(capacity_provider_volume=module.params["capacity_provider_volume"])
+        ]
     return snake_dict_to_camel_dict(scrub_none_parameters(params))
 
 
@@ -182,6 +194,8 @@ def _runtime_update_needed(module: AnsibleAWSModule, existing_runtime: Dict[str,
         lifecycleConfiguration=existing_runtime.get("lifecycle_configuration"),
         environmentVariables=existing_runtime.get("environment_variables"),
         authorizerConfiguration=existing_runtime.get("authorizer_configuration"),
+        capacityProviderConfiguration=existing_runtime.get("capacity_provider_configuration"),
+        filesystemConfigurations=existing_runtime.get("filesystem_configurations"),
     )
     desired_values: Dict[str, Any] = {
         key: value for key, value in desired.items() if key in current and value is not None

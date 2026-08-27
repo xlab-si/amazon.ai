@@ -133,6 +133,76 @@ options:
             - Scope values accepted by the custom JWT authorizer.
         type: list
         elements: str
+    capacity_provider_arn:
+        description:
+            - The ARN of the capacity provider for the runtime.
+            - Run the AgentCore Runtime on the Instances compute type.
+            - Provisions Amazon Web Services managed compute in your account.
+        type: str
+    session_storage:
+        description:
+            - Configuration for session storage.
+            - Persistent storage that is preserved across AgentCore Runtime session.
+            - Cannot be set if O(s3_files_access_point), O(efs_access_point) or O(capacity_provider_volume) is specified.
+        type: dict
+        suboptions:
+            mount_path:
+                description:
+                    - The mount path for the session storage filesystem inside the AgentCore Runtime.
+                    - Must be under /mnt with exactly one subdirectory level (for example, /mnt/data).
+                type: str
+                required: true
+    s3_files_access_point:
+        description:
+            - Configuration for an Amazon S3 Files access point to mount into the AgentCore Runtime.
+            - Cannot be set if O(session_storage), O(efs_access_point) or O(capacity_provider_volume) is specified.
+        type: dict
+        suboptions:
+            access_point_arn:
+                description:
+                    - The ARN of the S3 Files access point.
+                type: str
+                required: true
+            mount_path:
+                description:
+                    - The mount path for the S3 Files access point inside the AgentCore Runtime.
+                    - Must be under /mnt with exactly one subdirectory level (for example, /mnt/data).
+                type: str
+                required: true
+    efs_access_point:
+        description:
+            - Configuration for an Amazon EFS access point to mount into the AgentCore Runtime.
+            - Cannot be set if O(session_storage), O(s3_files_access_point) or O(capacity_provider_volume) is specified.
+        type: dict
+        suboptions:
+            access_point_arn:
+                description:
+                    - The ARN of the EFS access point.
+                type: str
+                required: true
+            mount_path:
+                description:
+                    - The mount path for the EFS access point inside the AgentCore Runtime.
+                    - Must be under /mnt with exactly one subdirectory level (for example, /mnt/data).
+                type: str
+                required: true
+    capacity_provider_volume:
+        description:
+            - Configuration for a capacity provider volume to mount into the AgentCore Runtime.
+            - Cannot be set if O(session_storage), O(s3_files_access_point), or O(efs_access_point) is specified.
+        type: dict
+        suboptions:
+            volume_name:
+                description:
+                    - The name of the capacity provider volume.
+                type: str
+                required: true
+            mount_path:
+                description:
+                    - The mount path for the capacity provider volume inside the AgentCore Runtime.
+                    - Must be under /mnt with exactly one subdirectory level (for example, /mnt/data).
+                type: str
+                required: true
     tags:
         description:
             - Tags attached to the runtime when it is created.
@@ -274,6 +344,34 @@ def main() -> None:
         authorizer_allowed_audience=dict(type="list", elements="str"),
         authorizer_allowed_clients=dict(type="list", elements="str"),
         authorizer_allowed_scopes=dict(type="list", elements="str"),
+        capacity_provider_arn=dict(type="str"),
+        session_storage=dict(
+            type="dict",
+            options=dict(
+                mount_path=dict(type="str", required=True),
+            ),
+        ),
+        s3_files_access_point=dict(
+            type="dict",
+            options=dict(
+                access_point_arn=dict(type="str", required=True),
+                mount_path=dict(type="str", required=True),
+            ),
+        ),
+        efs_access_point=dict(
+            type="dict",
+            options=dict(
+                access_point_arn=dict(type="str", required=True),
+                mount_path=dict(type="str", required=True),
+            ),
+        ),
+        capacity_provider_volume=dict(
+            type="dict",
+            options=dict(
+                volume_name=dict(type="str", required=True),
+                mount_path=dict(type="str", required=True),
+            ),
+        ),
         tags=dict(type="dict", aliases=["resource_tags"]),
         wait=dict(type="bool", default=True),
         wait_timeout=dict(type="int", default=600),
@@ -282,7 +380,10 @@ def main() -> None:
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        mutually_exclusive=[["container_configuration", "code_configuration"]],
+        mutually_exclusive=[
+            ["container_configuration", "code_configuration"],
+            ["session_storage", "s3_files_access_point", "efs_access_point", "capacity_provider_volume"],
+        ],
         required_together=[["network_security_groups", "network_subnets"]],
         required_if=[("state", "present", ["role_arn"])],
     )
