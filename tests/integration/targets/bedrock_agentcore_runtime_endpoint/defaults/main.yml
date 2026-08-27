@@ -1,0 +1,6 @@
+---
+test_id: "{{ tiny_prefix }}"
+agent_runtime_name: "test_agentcore_endpoint_runtime_{{ test_id }}"
+agent_runtime_role_name: "ansible-test-agentcore-endpoint-role-{{ test_id }}"
+container_uri: "public.ecr.aws/lambda/python:3.12"
+endpoint_name: "test-endpoint-{{ test_id }}"
