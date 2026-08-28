@@ -6,6 +6,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 try:
@@ -58,3 +59,40 @@ def list_code_repositories(client, **params: Any) -> List[Dict[str, Any]]:
     """
     paginator = client.get_paginator("list_code_repositories")
     return paginator.paginate(**params).build_full_result()["CodeRepositorySummaryList"]
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_image(client, image_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a specific SageMaker Image.
+
+    Args:
+        client: The boto3 SageMaker client.
+        image_name: The name of the SageMaker Image.
+
+    Returns:
+        A dictionary with the image details if found, otherwise None.
+
+    Raises:
+        ClientError: If AWS returns an error other than 'ResourceNotFound'.
+    """
+    try:
+        return client.describe_image(ImageName=image_name)
+    except is_boto3_error_code("ResourceNotFound"):
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_images(client, **params: Any) -> List[Dict[str, Any]]:
+    """
+    Retrieve a list of SageMaker Images using pagination.
+
+    Args:
+        client: The boto3 SageMaker client.
+        **params: Additional filter parameters for the list operation.
+
+    Returns:
+        A list of image summary dictionaries.
+    """
+    paginator = client.get_paginator("list_images")
+    return paginator.paginate(**params).build_full_result()["Images"]
