@@ -1,7 +1,7 @@
 ---
 test_id: "{{ tiny_prefix }}"
 model_name: "test-sagemaker-model-{{ test_id }}"
-model_role_name: "test-sagemaker-model-role-{{ test_id }}"
+model_role_name: "ansible-test-sagemaker-model-role-{{ test_id }}"
 model_bucket_name: "test-sagemaker-model-bucket-{{ test_id }}"
 # SageMaker requires a Docker V2 manifest (OCI manifests are rejected). The test creates
 # the ECR repo and pushes a Docker V2 image via skopeo (installed inside the test container)
