@@ -8,7 +8,49 @@
 
 from unittest.mock import MagicMock
 
+import pytest
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
+from botocore.exceptions import ClientError
+
+
+@pytest.mark.parametrize("error_code", ["ResourceNotFound", "ResourceNotFoundException"])
+def test_describe_endpoint_config_returns_none_when_missing(error_code):
+    client = MagicMock()
+    client.describe_endpoint_config.side_effect = ClientError(
+        {"Error": {"Code": error_code, "Message": "not found"}},
+        "DescribeEndpointConfig",
+    )
+
+    assert describe_endpoint_config(client, "missing-config") is None
+
+
+def test_reconcile_endpoint_config_tags_check_mode_does_not_modify_tags():
+    client = MagicMock()
+    module = MagicMock()
+    module.check_mode = True
+    module.params = {"tags": {"environment": "test"}, "purge_tags": True}
+    existing = {"EndpointConfigArn": "arn:aws:sagemaker:region:account:endpoint-config/test"}
+
+    client.get_paginator.return_value.paginate.return_value.build_full_result.return_value = {
+        "Tags": [{"Key": "environment", "Value": "production"}, {"Key": "owner", "Value": "team"}]
+    }
+
+    assert reconcile_endpoint_config_tags(client, module, existing)
+    client.add_tags.assert_not_called()
+    client.delete_tags.assert_not_called()
+
+
+def test_list_endpoint_configs_limits_total_results():
+    client = MagicMock()
+    paginator = client.get_paginator.return_value
+    paginator.paginate.return_value.build_full_result.return_value = {"EndpointConfigs": []}
+
+    list_endpoint_configs(client, MaxResults=1)
+
+    paginator.paginate.assert_called_once_with(PaginationConfig={"MaxItems": 1})
 
 
 class TestModelNeedsReplacement:
