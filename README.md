@@ -76,6 +76,8 @@ Name | Description
 [amazon.ai.devopsguru_insight_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetch information about Amazon DevOps Guru insights
 [amazon.ai.devopsguru_resource_collection](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manage DevOps Guru resource collections
 [amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetch information about Amazon DevOps Guru resource collection
+[amazon.ai.nova_act_workflow_definition](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.nova_act_workflow_definition_module.rst)|Manage Amazon Nova Act workflow definitions
+[amazon.ai.nova_act_workflow_definition_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.nova_act_workflow_definition_info_module.rst)|Gather information about Amazon Nova Act workflow definitions
 [amazon.ai.sagemaker_code_repository](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_module.rst)|Manage Amazon SageMaker Code Repositories
 [amazon.ai.sagemaker_code_repository_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_info_module.rst)|Gather information about SageMaker Code Repositories
 [amazon.ai.sagemaker_endpoint](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_module.rst)|Manage Amazon SageMaker endpoints
@@ -240,4 +242,3 @@ See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/C
 GNU General Public License v3.0 or later.
 
 See [LICENSE](https://www.gnu.org/licenses/gpl-3.0.txt) to see the full text.
-
