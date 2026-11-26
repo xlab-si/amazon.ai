@@ -9,13 +9,19 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from ansible_collections.amazon.ai.plugins.module_utils.utils import is_subset
+
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
+from ansible_collections.amazon.aws.plugins.module_utils.tagging import compare_aws_tags
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
+
+
+AGENTCORE_MINIMUM_BOTOCORE_VERSION = "1.39.7"
 
 
 class AgentRuntimeStatus(str, Enum):
@@ -36,6 +42,53 @@ class AgentRuntimeEndpointStatus(str, Enum):
     READY = "READY"
     DELETING = "DELETING"
     DELETED = "DELETED"
+
+
+class MemoryStatus(str, Enum):
+    CREATING = "CREATING"
+    ACTIVE = "ACTIVE"
+    FAILED = "FAILED"
+    DELETING = "DELETING"
+    UPDATING = "UPDATING"
+    DELETED = "DELETED"
+
+
+# Declared memory strategy key -> the `type` AWS reports for it on read.
+MEMORY_STRATEGY_TYPES = {
+    "semantic_memory_strategy": "SEMANTIC",
+    "summary_memory_strategy": "SUMMARIZATION",
+    "user_preference_memory_strategy": "USER_PREFERENCE",
+    "episodic_memory_strategy": "EPISODIC",
+    "custom_memory_strategy": "CUSTOM",
+}
+
+# Custom strategy override (create shape) -> {block: leaf key under the modify/read `custom_*_configuration`}.
+_OVERRIDE_BLOCKS = {
+    "semantic_override": {
+        "extraction": "semantic_extraction_override",
+        "consolidation": "semantic_consolidation_override",
+    },
+    "summary_override": {
+        "consolidation": "summary_consolidation_override",
+    },
+    "user_preference_override": {
+        "extraction": "user_preference_extraction_override",
+        "consolidation": "user_preference_consolidation_override",
+    },
+    "episodic_override": {
+        "extraction": "episodic_extraction_override",
+        "consolidation": "episodic_consolidation_override",
+        "reflection": "episodic_reflection_override",
+    },
+}
+
+_CUSTOM_BLOCK_WRAPPERS = {
+    "extraction": "custom_extraction_configuration",
+    "consolidation": "custom_consolidation_configuration",
+    "reflection": "custom_reflection_configuration",
+}
+
+_COMPARED_STRATEGY_FIELDS = ("description", "namespace_templates", "memory_record_schema")
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -170,6 +223,113 @@ def get_agent_runtime_endpoint(
     except is_boto3_error_code("ResourceNotFoundException"):
         return None
     return camel_dict_to_snake_dict(response)
+
+
+@AWSRetry.jittered_backoff(retries=10, catch_extra_error_codes=["ThrottledException"])
+def list_memories(client) -> List[Dict[str, Any]]:
+    """
+    Retrieve all AgentCore memory summaries using the AWS paginator.
+
+    Args:
+        client: The boto3 Bedrock AgentCore control client.
+
+    Returns:
+        A list of raw (camelCase) memory summary dictionaries. Summaries carry no ``name``.
+    """
+    paginator = client.get_paginator("list_memories")
+    response = paginator.paginate().build_full_result()
+    return response.get("memories", [])
+
+
+@AWSRetry.jittered_backoff(retries=10, catch_extra_error_codes=["ThrottledException"])
+def get_memory(client, memory_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve detailed information for an AgentCore memory by its ID.
+
+    Args:
+        client: The boto3 Bedrock AgentCore control client.
+        memory_id: The ID of the memory.
+
+    Returns:
+        The raw (camelCase) memory dictionary if found, else None.
+    """
+    try:
+        response = client.get_memory(memoryId=memory_id)
+    except is_boto3_error_code("ResourceNotFoundException"):
+        return None
+    return response["memory"]
+
+
+def find_memory_by_name(client, name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve detailed information for an AgentCore memory by its name.
+
+    ``list_memories`` does not return names, so only summaries whose ID follows the
+    ``<name>-<10 characters>`` convention are fetched, and the name is confirmed on the full record.
+
+    Args:
+        client: The boto3 Bedrock AgentCore control client.
+        name: The name of the memory.
+
+    Returns:
+        The raw (camelCase) memory dictionary if found, else None.
+    """
+    prefix = f"{name}-"
+    for summary in list_memories(client):
+        memory_id = summary.get("id", "")
+        if not memory_id.startswith(prefix) or len(memory_id) != len(prefix) + 10:
+            continue
+        memory = get_memory(client, memory_id)
+        if memory and memory.get("name") == name:
+            return memory
+    return None
+
+
+@AWSRetry.jittered_backoff(retries=10, catch_extra_error_codes=["ThrottlingException"])
+def list_tags(client, resource_arn: str) -> Dict[str, str]:
+    """
+    Retrieve the tags of an AgentCore resource.
+
+    Args:
+        client: The boto3 Bedrock AgentCore control client.
+        resource_arn: The ARN of the AgentCore resource.
+
+    Returns:
+        The tags as a raw key/value map, without case conversion.
+    """
+    return client.list_tags_for_resource(resourceArn=resource_arn).get("tags", {})
+
+
+def _update_tags(module: AnsibleAWSModule, client, resource_arn: str) -> bool:
+    """
+    Reconcile the tags of any taggable AgentCore resource in place, honouring ``purge_tags``.
+
+    Reads the desired tags from the ``tags`` and ``purge_tags`` module options; does nothing when
+    ``tags`` is not set, and makes no API writes in check mode.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        client: The boto3 Bedrock AgentCore control client.
+        resource_arn: The ARN of the AgentCore resource.
+
+    Returns:
+        True if tags were (or would be, in check mode) changed.
+    """
+    if module.params.get("tags") is None:
+        return False
+    current_tags = list_tags(client, resource_arn)
+    tags_to_add, tags_to_remove = compare_aws_tags(
+        current_tags,
+        module.params["tags"],
+        module.params.get("purge_tags", True),
+    )
+    if module.check_mode:
+        return bool(tags_to_add or tags_to_remove)
+    if tags_to_remove:
+        client.untag_resource(resourceArn=resource_arn, tagKeys=tags_to_remove)
+    if tags_to_add:
+        client.tag_resource(resourceArn=resource_arn, tags=tags_to_add)
+    return bool(tags_to_add or tags_to_remove)
 
 
 def _runtime_artifact(module: AnsibleAWSModule, existing_runtime: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -693,3 +853,375 @@ def delete_agent_runtime_endpoint(
             AgentRuntimeEndpointStatus.DELETED,
         )
     return True, f"Agent runtime endpoint {endpoint_name} deleted successfully."
+
+
+def strategy_configuration_to_modify_shape(strategy_key: str, strategy: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Translate a declared memory strategy's configuration from the create shape into the shape
+    ``update_memory`` accepts in ``modifyMemoryStrategies[].configuration`` (and ``get_memory``
+    reports in ``strategies[].configuration``), in snake_case.
+
+    Args:
+        strategy_key: The declared strategy key, e.g. ``custom_memory_strategy``.
+        strategy: The strategy body declared under that key.
+
+    Returns:
+        The configuration in modify shape; ``{}`` when the strategy carries none.
+    """
+    strategy = scrub_none_parameters(strategy)
+
+    if strategy_key == "episodic_memory_strategy":
+        reflection_configuration = strategy.get("reflection_configuration")
+        if not reflection_configuration:
+            return {}
+        return {"reflection": {"episodic_reflection_configuration": reflection_configuration}}
+
+    if strategy_key != "custom_memory_strategy":
+        return {}
+
+    configuration = strategy.get("configuration") or {}
+    modify_shape = {}
+    for override_key, blocks in _OVERRIDE_BLOCKS.items():
+        override = configuration.get(override_key) or {}
+        for block, leaf in blocks.items():
+            if override.get(block):
+                modify_shape[block] = {_CUSTOM_BLOCK_WRAPPERS[block]: {leaf: override[block]}}
+    if configuration.get("self_managed_configuration"):
+        modify_shape["self_managed_configuration"] = configuration["self_managed_configuration"]
+    return modify_shape
+
+
+def _declared_strategy(element: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    """Return the single (strategy key, strategy body) pair a declared strategy element sets."""
+    declared = [(key, value) for key, value in element.items() if key in MEMORY_STRATEGY_TYPES and value is not None]
+    if len(declared) != 1:
+        raise ValueError(f"Each memory strategy must set exactly one of: {', '.join(MEMORY_STRATEGY_TYPES)}.")
+    return declared[0]
+
+
+def _strategy_changes(strategy_key: str, strategy: Dict[str, Any], current: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the supplied strategy fields that differ from ``current``, in modify shape."""
+    changes = {}
+    for field in _COMPARED_STRATEGY_FIELDS:
+        if field in strategy and not is_subset(strategy[field], current.get(field)):
+            changes[field] = strategy[field]
+
+    record_expiry = strategy.get("record_expiry_specification") or {}
+    if "record_expiry_duration_days" in record_expiry:
+        if record_expiry["record_expiry_duration_days"] != current.get("record_expiry_duration_days"):
+            changes["record_expiry_specification"] = record_expiry
+
+    configuration = strategy_configuration_to_modify_shape(strategy_key, strategy)
+    if configuration:
+        current_configuration = {k: v for k, v in (current.get("configuration") or {}).items() if k != "type"}
+        if not is_subset(configuration, current_configuration):
+            changes["configuration"] = configuration
+
+    return changes
+
+
+def diff_memory_strategies(
+    current: List[Dict[str, Any]], desired: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Diff a memory's existing strategies against the complete desired set, matching them by name.
+
+    Only fields the user supplied are compared, so AWS-filled defaults never cause a diff.
+
+    Args:
+        current: The snake_cased ``strategies`` of a ``get_memory`` response.
+        desired: The declared ``memory_strategies`` elements (create shape).
+
+    Returns:
+        ``(strategies_to_add, strategies_to_modify, strategies_to_delete)`` in snake_case: create-shape
+        elements, modify-shape entries carrying ``memory_strategy_id``, and
+        ``{"memory_strategy_id": ...}`` entries.
+
+    Raises:
+        ValueError: On a strategy changing type, or a strategy name appearing twice in either list.
+    """
+    desired_by_name = {}
+    for element in desired:
+        element = scrub_none_parameters(element)
+        strategy_key, strategy = _declared_strategy(element)
+        if strategy["name"] in desired_by_name:
+            raise ValueError(f"Memory strategy name {strategy['name']} is declared more than once.")
+        desired_by_name[strategy["name"]] = (strategy_key, strategy, element)
+
+    current_by_name = {}
+    for strategy in current:
+        if strategy["name"] in current_by_name:
+            raise ValueError(f"Memory strategy name {strategy['name']} appears more than once on the memory.")
+        current_by_name[strategy["name"]] = strategy
+
+    strategies_to_add = []
+    strategies_to_modify = []
+    for name, (strategy_key, strategy, element) in desired_by_name.items():
+        existing = current_by_name.get(name)
+        if existing is None:
+            strategies_to_add.append(element)
+            continue
+        desired_type = MEMORY_STRATEGY_TYPES[strategy_key]
+        if existing.get("type") != desired_type:
+            raise ValueError(
+                f"Memory strategy {name} cannot change type from {existing.get('type')} to {desired_type}; "
+                "remove it and add it under a new name."
+            )
+        changes = _strategy_changes(strategy_key, strategy, existing)
+        if changes:
+            strategies_to_modify.append({"memory_strategy_id": existing["strategy_id"], **changes})
+
+    strategies_to_delete = [
+        {"memory_strategy_id": strategy["strategy_id"]}
+        for name, strategy in current_by_name.items()
+        if name not in desired_by_name
+    ]
+
+    return strategies_to_add, strategies_to_modify, strategies_to_delete
+
+
+def wait_for_memory_status(
+    client,
+    module: AnsibleAWSModule,
+    memory_id: str,
+    status: MemoryStatus,
+    sleep_time: int = 5,
+) -> None:
+    """
+    Wait for an AgentCore memory to reach a specific status.
+
+    Polls ``get_memory`` every ``sleep_time`` seconds, bounded by the ``wait_timeout`` option.
+
+    Behavior:
+        - ``MemoryStatus.ACTIVE``: succeeds once the memory and every one of its strategies are
+          ``ACTIVE``; fails as soon as the memory or any strategy is ``FAILED``, or if the memory
+          disappears.
+        - ``MemoryStatus.DELETED``: succeeds once the memory is no longer found; fails if it turns
+          ``FAILED``.
+        - Any other target: succeeds once the memory reports that status.
+        - Fails the module when the timeout expires.
+
+    Args:
+        client: The boto3 Bedrock AgentCore control client.
+        module: The AnsibleAWSModule instance, used for error reporting and ``wait_timeout``.
+        memory_id: The ID of the memory to monitor.
+        status: The target status, e.g. ``MemoryStatus.ACTIVE`` or ``MemoryStatus.DELETED``.
+        sleep_time: Seconds to sleep between polling attempts. Defaults to 5.
+    """
+    target = MemoryStatus(status).value
+    wait_timeout = module.params.get("wait_timeout", 600)
+    max_attempts = max(1, wait_timeout // sleep_time)
+    name = memory_id
+
+    for attempt in range(max_attempts):
+        memory = get_memory(client, memory_id)
+        if memory is None:
+            if target == MemoryStatus.DELETED:
+                return
+            module.fail_json(msg=f"Memory {name} was not found while waiting for it to reach {target}.")
+
+        name = memory.get("name", memory_id)
+        current_status = memory.get("status")
+        if current_status == MemoryStatus.FAILED:
+            module.fail_json(
+                msg=f"Memory {name} failed: {memory.get('failureReason', 'Unknown failure reason')}.",
+                failure_reason=memory.get("failureReason"),
+            )
+
+        if target == MemoryStatus.ACTIVE:
+            strategies = memory.get("strategies") or []
+            failed_strategies = [s.get("name") for s in strategies if s.get("status") == MemoryStatus.FAILED]
+            if failed_strategies:
+                module.fail_json(msg=f"Memory {name} has failed strategies: {', '.join(failed_strategies)}.")
+            if current_status == MemoryStatus.ACTIVE and all(
+                s.get("status") == MemoryStatus.ACTIVE for s in strategies
+            ):
+                return
+        elif current_status == target:
+            return
+
+        if attempt < max_attempts - 1:
+            time.sleep(sleep_time)
+
+    module.fail_json(msg=f"Timed out waiting for memory {name} to reach {target}.")
+
+
+def create_memory(module: AnsibleAWSModule, client) -> Tuple[bool, Optional[str], str]:
+    """
+    Creates a new memory if not in check_mode, otherwise simulates creation.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        client: The boto3 Bedrock AgentCore control client.
+
+    Returns:
+        (changed, memory_id, message)
+    """
+    name: str = module.params["name"]
+    if module.params.get("event_expiry_duration") is None:
+        module.fail_json(msg="event_expiry_duration is required to create a memory.")
+    if module.check_mode:
+        return True, None, f"Check mode: would have created memory {name}."
+
+    params: Dict[str, Any] = dict(
+        name=name,
+        description=module.params.get("description"),
+        event_expiry_duration=module.params["event_expiry_duration"],
+        encryption_key_arn=module.params.get("encryption_key_arn"),
+        memory_execution_role_arn=module.params.get("memory_execution_role_arn"),
+        memory_strategies=module.params.get("memory_strategies"),
+        indexed_keys=module.params.get("indexed_keys"),
+        namespace_keys=module.params.get("namespace_keys"),
+        stream_delivery_resources=module.params.get("stream_delivery_resources"),
+    )
+    params = snake_dict_to_camel_dict(scrub_none_parameters(params))
+    if module.params.get("tags"):
+        params["tags"] = module.params["tags"]
+
+    response = client.create_memory(**params)
+    memory_id: str = response["memory"]["id"]
+    # User has an option to wait for the memory to be active, default is True
+    if module.params.get("wait", True):
+        wait_for_memory_status(client, module, memory_id, MemoryStatus.ACTIVE)
+    return True, memory_id, f"Created memory {name}."
+
+
+def _memory_update_params(module: AnsibleAWSModule, existing: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build the ``update_memory`` kwargs for every supplied option that differs from the memory.
+
+    Fails the module on a change AWS cannot make in place (``encryption_key_arn``, removing or
+    retyping an indexed key, a strategy changing type) and on a strategy change to a memory
+    managed by another resource.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        existing: The raw (camelCase) ``get_memory`` result.
+
+    Returns:
+        The snake_case kwargs to send, without ``memory_id``; an empty dict when nothing differs.
+    """
+    current = camel_dict_to_snake_dict(existing, ignore_list=["tags", "Tags"])
+    name = current["name"]
+    params: Dict[str, Any] = dict()
+
+    encryption_key_arn = module.params.get("encryption_key_arn")
+    if encryption_key_arn is not None and encryption_key_arn != current.get("encryption_key_arn"):
+        module.fail_json(msg="encryption_key_arn cannot be changed on an existing memory; delete and recreate it.")
+
+    for option in ("description", "event_expiry_duration", "memory_execution_role_arn"):
+        value = module.params.get(option)
+        if value is not None and value != current.get(option):
+            params[option] = value
+
+    indexed_keys = module.params.get("indexed_keys")
+    if indexed_keys is not None:
+        desired_types = {entry["key"]: entry["type"] for entry in indexed_keys}
+        current_types = {entry["key"]: entry.get("type") for entry in current.get("indexed_keys") or []}
+        keys_to_reject = sorted(key for key, key_type in current_types.items() if desired_types.get(key) != key_type)
+        if keys_to_reject:
+            module.fail_json(
+                msg=f"Indexed keys cannot be removed or changed once declared: {', '.join(keys_to_reject)}."
+            )
+        keys_to_add = [scrub_none_parameters(entry) for entry in indexed_keys if entry["key"] not in current_types]
+        if keys_to_add:
+            params["add_indexed_keys"] = keys_to_add
+
+    namespace_keys = module.params.get("namespace_keys")
+    if namespace_keys is not None:
+        desired_keys = {entry["key"]: scrub_none_parameters(entry) for entry in namespace_keys}
+        current_keys = {entry["key"]: entry for entry in current.get("namespace_keys") or []}
+        if desired_keys.keys() != current_keys.keys() or not all(
+            is_subset(entry, current_keys[key]) for key, entry in desired_keys.items()
+        ):
+            params["namespace_keys"] = list(desired_keys.values())
+
+    stream_delivery_resources = module.params.get("stream_delivery_resources")
+    if stream_delivery_resources is not None:
+        desired_delivery = scrub_none_parameters(stream_delivery_resources)
+        current_delivery = current.get("stream_delivery_resources") or dict(resources=[])
+        if not is_subset(desired_delivery, current_delivery):
+            params["stream_delivery_resources"] = desired_delivery
+
+    memory_strategies = module.params.get("memory_strategies")
+    if memory_strategies is not None:
+        try:
+            strategies_to_add, strategies_to_modify, strategies_to_delete = diff_memory_strategies(
+                current.get("strategies") or [], memory_strategies
+            )
+        except ValueError as e:
+            module.fail_json(msg=str(e))
+        strategy_changes = scrub_none_parameters(
+            dict(
+                add_memory_strategies=strategies_to_add or None,
+                modify_memory_strategies=strategies_to_modify or None,
+                delete_memory_strategies=strategies_to_delete or None,
+            )
+        )
+        if strategy_changes:
+            if current.get("managed_by_resource_arn"):
+                module.fail_json(
+                    msg=f"Memory {name} is managed by {current['managed_by_resource_arn']}; "
+                    "change it through that resource."
+                )
+            params["memory_strategies"] = strategy_changes
+
+    return params
+
+
+def update_memory(module: AnsibleAWSModule, client, existing: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Updates an existing memory and its tags if not in check_mode, otherwise simulates the update.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        client: The boto3 Bedrock AgentCore control client.
+        existing: The raw (camelCase) ``get_memory`` result.
+
+    Returns:
+        (changed, message)
+    """
+    name: str = existing["name"]
+    params = _memory_update_params(module, existing)
+
+    if module.check_mode:
+        if params or _update_tags(module, client, existing["arn"]):
+            return True, f"Check mode: would have updated memory {name}."
+        return False, f"Memory {name} is already in the desired state."
+
+    if params:
+        client.update_memory(memoryId=existing["id"], **snake_dict_to_camel_dict(params))
+    tags_changed = _update_tags(module, client, existing["arn"])
+    if not params and not tags_changed:
+        return False, f"Memory {name} is already in the desired state."
+
+    # User has an option to wait for the memory to be active, default is True
+    if params and module.params.get("wait", True):
+        wait_for_memory_status(client, module, existing["id"], MemoryStatus.ACTIVE)
+    return True, f"Updated memory {name}."
+
+
+def delete_memory(module: AnsibleAWSModule, client, existing: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Deletes an existing memory if not in check_mode, otherwise simulates the deletion.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        client: The boto3 Bedrock AgentCore control client.
+        existing: The raw (camelCase) ``get_memory`` result.
+
+    Returns:
+        (changed, message)
+    """
+    name: str = existing["name"]
+    managed_by = existing.get("managedByResourceArn")
+    if managed_by:
+        module.fail_json(msg=f"Memory {name} is managed by {managed_by}; change it through that resource.")
+    if module.check_mode:
+        return True, f"Check mode: would have deleted memory {name}."
+
+    client.delete_memory(memoryId=existing["id"])
+    # User has an option to wait for the memory to be deleted, default is True
+    if module.params.get("wait", True):
+        wait_for_memory_status(client, module, existing["id"], MemoryStatus.DELETED)
+    return True, f"Deleted memory {name}."

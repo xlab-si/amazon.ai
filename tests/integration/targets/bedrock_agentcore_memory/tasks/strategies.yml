@@ -1,0 +1,232 @@
+---
+# Scenario 5: add a summary strategy and change the semantic strategy's description - ladder
+- name: "Scenario 5: Add and modify strategies (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+      - "{{ summary_strategy }}"
+  check_mode: true
+  register: strategies_check
+
+- name: "Scenario 5: Assert add and modify strategies (check mode)"
+  ansible.builtin.assert:
+    that:
+      - strategies_check is changed
+      - 'strategies_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+      - strategies_check.memory.strategies | length == 1
+
+- name: "Scenario 5: Add and modify strategies"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+      - "{{ summary_strategy }}"
+  register: strategies_real
+
+- name: "Scenario 5: Assert add and modify strategies"
+  vars:
+    semantic: "{{ strategies_real.memory.strategies | selectattr('name', 'equalto', 'facts') | first }}"
+    summary: "{{ strategies_real.memory.strategies | selectattr('name', 'equalto', 'summaries') | first }}"
+  ansible.builtin.assert:
+    that:
+      - strategies_real is changed
+      - strategies_real.msg == "Updated memory " ~ memory_name ~ "."
+      - strategies_real.memory.strategies | length == 2
+      - strategies_real.memory.strategies | map(attribute='status') | unique == ["ACTIVE"]
+      - semantic.strategy_id == semantic_strategy_id
+      - semantic.description == "Extracts facts about the user"
+      - summary.type == "SUMMARIZATION"
+
+- name: "Scenario 5: Add and modify strategies (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+      - "{{ summary_strategy }}"
+  register: strategies_rerun
+
+- name: "Scenario 5: Assert add and modify strategies (rerun)"
+  ansible.builtin.assert:
+    that:
+      - strategies_rerun is not changed
+      - strategies_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+
+# Scenario 6: add a custom override strategy with an execution role - ladder
+- name: "Scenario 6: Add a custom override strategy (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_execution_role_arn: "{{ memory_role_arn }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+      - "{{ summary_strategy }}"
+      - "{{ custom_strategy }}"
+  check_mode: true
+  register: custom_check
+
+- name: "Scenario 6: Assert add a custom override strategy (check mode)"
+  ansible.builtin.assert:
+    that:
+      - custom_check is changed
+      - 'custom_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+
+- name: "Scenario 6: Add a custom override strategy"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_execution_role_arn: "{{ memory_role_arn }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+      - "{{ summary_strategy }}"
+      - "{{ custom_strategy }}"
+  register: custom_real
+
+- name: "Scenario 6: Assert add a custom override strategy"
+  vars:
+    custom: "{{ custom_real.memory.strategies | selectattr('name', 'equalto', 'product_facts') | first }}"
+    extraction: "{{ custom.configuration.extraction.custom_extraction_configuration.semantic_extraction_override }}"
+  ansible.builtin.assert:
+    that:
+      - custom_real is changed
+      - custom_real.msg == "Updated memory " ~ memory_name ~ "."
+      - custom_real.memory.memory_execution_role_arn == memory_role_arn
+      - custom_real.memory.strategies | length == 3
+      - custom.type == "CUSTOM"
+      - custom.status == "ACTIVE"
+      - extraction.append_to_prompt == "Focus on facts about products the user owns."
+      - extraction.model_id == memory_model_id
+
+- name: "Scenario 6: Add a custom override strategy (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_execution_role_arn: "{{ memory_role_arn }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+      - "{{ summary_strategy }}"
+      - "{{ custom_strategy }}"
+  register: custom_rerun
+
+# Not changed proves the create -> read shape translation of the override configuration
+- name: "Scenario 6: Assert add a custom override strategy (rerun)"
+  ansible.builtin.assert:
+    that:
+      - custom_rerun is not changed
+      - custom_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+
+# Scenario 6: change the custom strategy's append_to_prompt - ladder
+- name: "Scenario 6: Change the custom override prompt (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+      - "{{ summary_strategy }}"
+      - "{{ custom_strategy_updated }}"
+  check_mode: true
+  register: custom_prompt_check
+
+- name: "Scenario 6: Assert change the custom override prompt (check mode)"
+  ansible.builtin.assert:
+    that:
+      - custom_prompt_check is changed
+      - 'custom_prompt_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+
+- name: "Scenario 6: Change the custom override prompt"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+      - "{{ summary_strategy }}"
+      - "{{ custom_strategy_updated }}"
+  register: custom_prompt_real
+
+- name: "Scenario 6: Assert change the custom override prompt"
+  vars:
+    custom: "{{ custom_prompt_real.memory.strategies | selectattr('name', 'equalto', 'product_facts') | first }}"
+    extraction: "{{ custom.configuration.extraction.custom_extraction_configuration.semantic_extraction_override }}"
+  ansible.builtin.assert:
+    that:
+      - custom_prompt_real is changed
+      - custom_prompt_real.msg == "Updated memory " ~ memory_name ~ "."
+      - custom.status == "ACTIVE"
+      - extraction.append_to_prompt == "Focus on facts about products the user owns or wants."
+
+- name: "Scenario 6: Change the custom override prompt (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+      - "{{ summary_strategy }}"
+      - "{{ custom_strategy_updated }}"
+  register: custom_prompt_rerun
+
+- name: "Scenario 6: Assert change the custom override prompt (rerun)"
+  ansible.builtin.assert:
+    that:
+      - custom_prompt_rerun is not changed
+      - custom_prompt_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+
+# Scenario 7: declare only the semantic strategy - ladder
+- name: "Scenario 7: Remove strategies (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+  check_mode: true
+  register: remove_strategies_check
+
+- name: "Scenario 7: Assert remove strategies (check mode)"
+  ansible.builtin.assert:
+    that:
+      - remove_strategies_check is changed
+      - 'remove_strategies_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+      - remove_strategies_check.memory.strategies | length == 3
+
+- name: "Scenario 7: Remove strategies"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+  register: remove_strategies_real
+
+- name: "Scenario 7: Assert remove strategies"
+  ansible.builtin.assert:
+    that:
+      - remove_strategies_real is changed
+      - remove_strategies_real.msg == "Updated memory " ~ memory_name ~ "."
+      - remove_strategies_real.memory.strategies | length == 1
+      - remove_strategies_real.memory.strategies[0].strategy_id == semantic_strategy_id
+
+- name: "Scenario 7: Remove strategies (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_updated }}"
+  register: remove_strategies_rerun
+
+- name: "Scenario 7: Assert remove strategies (rerun)"
+  ansible.builtin.assert:
+    that:
+      - remove_strategies_rerun is not changed
+      - remove_strategies_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+
+# Scenario 8: a strategy cannot change type
+- name: "Scenario 8: Re-declare the semantic strategy under another type"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_strategies:
+      - "{{ semantic_strategy_retyped }}"
+  register: retype_strategy
+  ignore_errors: true
+
+- name: "Scenario 8: Get the memory after the failed type change"
+  amazon.ai.bedrock_agentcore_memory_info:
+    name: "{{ memory_name }}"
+  register: retype_info
+
+- name: "Scenario 8: Assert the type change failed and the memory is unchanged"
+  ansible.builtin.assert:
+    that:
+      - retype_strategy is failed
+      - retype_strategy.msg == "Memory strategy facts cannot change type from SEMANTIC to SUMMARIZATION; remove it and add it under a new name."
+      - retype_info.memories[0].strategies | length == 1
+      - retype_info.memories[0].strategies[0].strategy_id == semantic_strategy_id
+      - retype_info.memories[0].strategies[0].type == "SEMANTIC"

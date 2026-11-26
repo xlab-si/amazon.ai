@@ -1,0 +1,125 @@
+---
+# Scenario 1: create without event_expiry_duration
+- name: "Scenario 1: Create a memory without event_expiry_duration"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+  register: create_no_expiry
+  ignore_errors: true
+
+- name: "Scenario 1: Assert the create failed early"
+  ansible.builtin.assert:
+    that:
+      - create_no_expiry is failed
+      - create_no_expiry.msg == "event_expiry_duration is required to create a memory."
+
+# Scenario 2: create - ladder
+- name: "Scenario 2: Create a memory (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    description: "{{ memory_description }}"
+    event_expiry_duration: 30
+    memory_strategies:
+      - "{{ semantic_strategy }}"
+    tags: "{{ memory_tags }}"
+  check_mode: true
+  register: create_check
+
+- name: "Scenario 2: Assert create (check mode)"
+  ansible.builtin.assert:
+    that:
+      - create_check is changed
+      - 'create_check.msg == "Check mode: would have created memory " ~ memory_name ~ "."'
+      - create_check.memory == {}
+
+- name: "Scenario 2: Create a memory"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    description: "{{ memory_description }}"
+    event_expiry_duration: 30
+    memory_strategies:
+      - "{{ semantic_strategy }}"
+    tags: "{{ memory_tags }}"
+  register: create_real
+
+- name: "Scenario 2: Assert create"
+  ansible.builtin.assert:
+    that:
+      - create_real is changed
+      - create_real.msg == "Created memory " ~ memory_name ~ "."
+      - create_real.memory.name == memory_name
+      - create_real.memory.status == "ACTIVE"
+      - create_real.memory.description == memory_description
+      - create_real.memory.event_expiry_duration == 30
+      # find_memory_by_name relies on the <name>-<10 characters> ID convention
+      - create_real.memory.id.startswith(memory_name ~ "-")
+      - create_real.memory.id | length == memory_name | length + 11
+      - create_real.memory.arn.endswith(":memory/" ~ create_real.memory.id)
+      - create_real.memory.strategies | length == 1
+      - create_real.memory.strategies[0].name == "facts"
+      - create_real.memory.strategies[0].type == "SEMANTIC"
+      - create_real.memory.strategies[0].status == "ACTIVE"
+      - create_real.memory.strategies[0].description == "Extracts facts"
+      - create_real.memory.tags == memory_tags
+
+- name: "Scenario 2: Save the memory identifiers"
+  ansible.builtin.set_fact:
+    memory_id: "{{ create_real.memory.id }}"
+    memory_arn: "{{ create_real.memory.arn }}"
+    semantic_strategy_id: "{{ create_real.memory.strategies[0].strategy_id }}"
+
+- name: "Scenario 2: Create a memory (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    description: "{{ memory_description }}"
+    event_expiry_duration: 30
+    memory_strategies:
+      - "{{ semantic_strategy }}"
+    tags: "{{ memory_tags }}"
+  register: create_rerun
+
+- name: "Scenario 2: Assert create (rerun)"
+  ansible.builtin.assert:
+    that:
+      - create_rerun is not changed
+      - create_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+      - create_rerun.memory.arn == memory_arn
+      - create_rerun.memory.tags == memory_tags
+
+# Scenario 3: info module
+- name: "Scenario 3: Get the memory by name"
+  amazon.ai.bedrock_agentcore_memory_info:
+    name: "{{ memory_name }}"
+  register: info_by_name
+
+- name: "Scenario 3: Get the memory by ID"
+  amazon.ai.bedrock_agentcore_memory_info:
+    memory_id: "{{ memory_id }}"
+  register: info_by_id
+
+- name: "Scenario 3: List every memory"
+  amazon.ai.bedrock_agentcore_memory_info:
+  register: info_all
+
+- name: "Scenario 3: Get a memory that does not exist"
+  amazon.ai.bedrock_agentcore_memory_info:
+    name: "{{ memory_name }}_missing"
+  register: info_missing
+
+- name: "Scenario 3: Assert info results"
+  ansible.builtin.assert:
+    that:
+      - info_by_name is not changed
+      - info_by_name.memories | length == 1
+      - info_by_name.memories[0].arn == memory_arn
+      - info_by_name.memories[0].name == memory_name
+      - info_by_name.memories[0].status == "ACTIVE"
+      - info_by_name.memories[0].strategies | length == 1
+      - info_by_name.memories[0].tags is not defined
+      - info_by_name.msg == "Found 1 memory."
+      - info_by_id.memories | length == 1
+      - info_by_id.memories[0].arn == memory_arn
+      - info_all.memories | selectattr("arn", "equalto", memory_arn) | list | length == 1
+      - info_missing is not failed
+      - info_missing is not changed
+      - info_missing.memories == []
+      - info_missing.msg == "Found 0 memories."

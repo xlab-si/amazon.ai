@@ -1,0 +1,43 @@
+---
+- name: "Setup: Create the Kinesis data stream for stream delivery"
+  community.aws.kinesis_stream:
+    name: "{{ memory_stream_name }}"
+    shards: 1
+    wait: true
+  register: memory_stream
+
+- name: "Setup: Create the memory execution role"
+  amazon.aws.iam_role:
+    name: "{{ memory_role_name }}"
+    assume_role_policy_document: "{{ lookup('file', 'assume_role_bedrock_agentcore_memory.json') }}"
+    managed_policies:
+      - "arn:aws:iam::aws:policy/AmazonBedrockAgentCoreMemoryBedrockModelInferenceExecutionRolePolicy"
+    state: present
+  register: memory_role
+
+- name: "Setup: Allow the memory execution role to write to the Kinesis data stream"
+  amazon.aws.iam_policy:
+    iam_type: role
+    iam_name: "{{ memory_role_name }}"
+    policy_name: "memory-stream-delivery"
+    policy_json: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["kinesis:PutRecord", "kinesis:PutRecords", "kinesis:DescribeStream"],
+            "Resource": "{{ memory_stream.stream_arn }}"
+          }
+        ]
+      }
+    state: present
+
+- name: "Setup: Save the role and stream ARNs"
+  ansible.builtin.set_fact:
+    memory_role_arn: "{{ memory_role.iam_role.arn }}"
+    memory_stream_arn: "{{ memory_stream.stream_arn }}"
+
+- name: "Setup: Wait for the IAM role to propagate"
+  ansible.builtin.pause:
+    seconds: 15

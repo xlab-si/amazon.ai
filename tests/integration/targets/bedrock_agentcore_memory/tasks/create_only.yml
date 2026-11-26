@@ -1,0 +1,21 @@
+---
+# Scenario 13: encryption_key_arn is create-only
+- name: "Scenario 13: Change the encryption key"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    encryption_key_arn: "arn:aws:kms:{{ aws_region }}:123456789012:key/00000000-0000-0000-0000-000000000000"
+  register: encryption_change
+  ignore_errors: true
+
+- name: "Scenario 13: Get the memory after the failed encryption key change"
+  amazon.ai.bedrock_agentcore_memory_info:
+    name: "{{ memory_name }}"
+  register: encryption_info
+
+- name: "Scenario 13: Assert the encryption key change failed and the memory is unchanged"
+  ansible.builtin.assert:
+    that:
+      - encryption_change is failed
+      - encryption_change.msg == "encryption_key_arn cannot be changed on an existing memory; delete and recreate it."
+      - encryption_info.memories[0].arn == memory_arn
+      - encryption_info.memories[0].encryption_key_arn is not defined

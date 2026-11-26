@@ -1,0 +1,27 @@
+---
+- name: "Teardown: Delete the memory"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    state: absent
+    wait: true
+  ignore_errors: true
+
+- name: "Teardown: Delete the no-wait memory"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_no_wait_name }}"
+    state: absent
+    wait: true
+  ignore_errors: true
+
+- name: "Teardown: Delete the Kinesis data stream"
+  community.aws.kinesis_stream:
+    name: "{{ memory_stream_name }}"
+    state: absent
+    wait: true
+  ignore_errors: true
+
+- name: "Teardown: Delete the memory execution role"
+  amazon.aws.iam_role:
+    name: "{{ memory_role_name }}"
+    state: absent
+  ignore_errors: true

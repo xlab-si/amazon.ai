@@ -12,6 +12,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.utils import camel_dict_
 from ansible_collections.amazon.ai.plugins.module_utils.utils import config_block_differs
 from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
 from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
+from ansible_collections.amazon.ai.plugins.module_utils.utils import is_subset
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
 from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url
 from ansible_collections.amazon.ai.plugins.module_utils.utils import snake_dict_to_camel_dict_keeping
@@ -317,3 +318,27 @@ def test_stringify_values():
         "d": "1.5",
         "E_f": "x",
     }
+
+
+# -------------------
+# Tests for is_subset
+# -------------------
+@pytest.mark.parametrize(
+    "desired,current,expected",
+    [
+        ({"a": {"b": 1}}, {"a": {"b": 1, "c": 2}, "d": 3}, True),
+        ({"a": {"b": 1}}, {"a": {"b": 2}}, False),
+        ({"a": 1, "b": 2}, {"a": 1}, False),
+        ([{"a": 1}], [{"a": 1}, {"a": 2}], False),
+        ([{"a": 1}, {"b": 2}], [{"a": 1, "x": 0}, {"b": 2, "y": 0}], True),
+    ],
+    ids=[
+        "nested-dict-subset",
+        "differing-scalar",
+        "missing-key-in-current",
+        "lists-different-length",
+        "lists-pairwise-subset",
+    ],
+)
+def test_is_subset(desired, current, expected):
+    assert is_subset(desired, current) is expected

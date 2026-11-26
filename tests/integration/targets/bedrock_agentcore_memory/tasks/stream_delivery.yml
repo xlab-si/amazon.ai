@@ -1,0 +1,105 @@
+---
+# Scenario 11: stream delivery to Kinesis - ladder
+- name: "Scenario 11: Enable stream delivery (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_execution_role_arn: "{{ memory_role_arn }}"
+    stream_delivery_resources:
+      resources:
+        - kinesis:
+            data_stream_arn: "{{ memory_stream_arn }}"
+            content_configurations:
+              - type: "MEMORY_RECORDS"
+                level: "FULL_CONTENT"
+  check_mode: true
+  register: stream_check
+
+- name: "Scenario 11: Assert enable stream delivery (check mode)"
+  ansible.builtin.assert:
+    that:
+      - stream_check is changed
+      - 'stream_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+
+- name: "Scenario 11: Enable stream delivery"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_execution_role_arn: "{{ memory_role_arn }}"
+    stream_delivery_resources:
+      resources:
+        - kinesis:
+            data_stream_arn: "{{ memory_stream_arn }}"
+            content_configurations:
+              - type: "MEMORY_RECORDS"
+                level: "FULL_CONTENT"
+  register: stream_real
+
+- name: "Scenario 11: Assert enable stream delivery"
+  vars:
+    kinesis: "{{ stream_real.memory.stream_delivery_resources.resources[0].kinesis }}"
+  ansible.builtin.assert:
+    that:
+      - stream_real is changed
+      - stream_real.msg == "Updated memory " ~ memory_name ~ "."
+      - stream_real.memory.stream_delivery_resources.resources | length == 1
+      - kinesis.data_stream_arn == memory_stream_arn
+      - 'kinesis.content_configurations == [{"type": "MEMORY_RECORDS", "level": "FULL_CONTENT"}]'
+
+- name: "Scenario 11: Enable stream delivery (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    memory_execution_role_arn: "{{ memory_role_arn }}"
+    stream_delivery_resources:
+      resources:
+        - kinesis:
+            data_stream_arn: "{{ memory_stream_arn }}"
+            content_configurations:
+              - type: "MEMORY_RECORDS"
+                level: "FULL_CONTENT"
+  register: stream_rerun
+
+- name: "Scenario 11: Assert enable stream delivery (rerun)"
+  ansible.builtin.assert:
+    that:
+      - stream_rerun is not changed
+      - stream_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+
+- name: "Scenario 11: Disable stream delivery (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    stream_delivery_resources:
+      resources: []
+  check_mode: true
+  register: stream_off_check
+
+- name: "Scenario 11: Assert disable stream delivery (check mode)"
+  ansible.builtin.assert:
+    that:
+      - stream_off_check is changed
+      - 'stream_off_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+
+- name: "Scenario 11: Disable stream delivery"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    stream_delivery_resources:
+      resources: []
+  register: stream_off_real
+
+- name: "Scenario 11: Assert disable stream delivery"
+  ansible.builtin.assert:
+    that:
+      - stream_off_real is changed
+      - stream_off_real.msg == "Updated memory " ~ memory_name ~ "."
+      - (stream_off_real.memory.stream_delivery_resources | default({})).resources | default([]) | length == 0
+
+- name: "Scenario 11: Disable stream delivery (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    stream_delivery_resources:
+      resources: []
+  register: stream_off_rerun
+
+- name: "Scenario 11: Assert disable stream delivery (rerun)"
+  ansible.builtin.assert:
+    that:
+      - stream_off_rerun is not changed
+      - stream_off_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."

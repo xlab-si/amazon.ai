@@ -1,0 +1,166 @@
+---
+# Scenario 9: indexed keys are add-only
+- name: "Scenario 9: Add an indexed key (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    indexed_keys:
+      - key: "priority"
+        type: "NUMBER"
+  check_mode: true
+  register: indexed_key_check
+
+- name: "Scenario 9: Assert add an indexed key (check mode)"
+  ansible.builtin.assert:
+    that:
+      - indexed_key_check is changed
+      - 'indexed_key_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+
+- name: "Scenario 9: Add an indexed key"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    indexed_keys:
+      - key: "priority"
+        type: "NUMBER"
+  register: indexed_key_real
+
+- name: "Scenario 9: Assert add an indexed key"
+  ansible.builtin.assert:
+    that:
+      - indexed_key_real is changed
+      - indexed_key_real.msg == "Updated memory " ~ memory_name ~ "."
+      - 'indexed_key_real.memory.indexed_keys == [{"key": "priority", "type": "NUMBER"}]'
+
+- name: "Scenario 9: Add an indexed key (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    indexed_keys:
+      - key: "priority"
+        type: "NUMBER"
+  register: indexed_key_rerun
+
+- name: "Scenario 9: Assert add an indexed key (rerun)"
+  ansible.builtin.assert:
+    that:
+      - indexed_key_rerun is not changed
+      - indexed_key_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+
+- name: "Scenario 9: Add a second indexed key (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    indexed_keys:
+      - key: "priority"
+        type: "NUMBER"
+      - key: "topic"
+        type: "STRING"
+  check_mode: true
+  register: indexed_key2_check
+
+- name: "Scenario 9: Assert add a second indexed key (check mode)"
+  ansible.builtin.assert:
+    that:
+      - indexed_key2_check is changed
+      - 'indexed_key2_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+
+- name: "Scenario 9: Add a second indexed key"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    indexed_keys:
+      - key: "priority"
+        type: "NUMBER"
+      - key: "topic"
+        type: "STRING"
+  register: indexed_key2_real
+
+- name: "Scenario 9: Assert add a second indexed key"
+  ansible.builtin.assert:
+    that:
+      - indexed_key2_real is changed
+      - indexed_key2_real.msg == "Updated memory " ~ memory_name ~ "."
+      - indexed_key2_real.memory.indexed_keys | map(attribute='key') | sort == ["priority", "topic"]
+
+- name: "Scenario 9: Add a second indexed key (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    indexed_keys:
+      - key: "priority"
+        type: "NUMBER"
+      - key: "topic"
+        type: "STRING"
+  register: indexed_key2_rerun
+
+- name: "Scenario 9: Assert add a second indexed key (rerun)"
+  ansible.builtin.assert:
+    that:
+      - indexed_key2_rerun is not changed
+      - indexed_key2_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+
+- name: "Scenario 9: Remove an indexed key"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    indexed_keys:
+      - key: "topic"
+        type: "STRING"
+  register: indexed_key_remove
+  ignore_errors: true
+
+- name: "Scenario 9: Assert removing an indexed key fails"
+  ansible.builtin.assert:
+    that:
+      - indexed_key_remove is failed
+      - 'indexed_key_remove.msg == "Indexed keys cannot be removed or changed once declared: priority."'
+
+# Scenario 10: namespace keys - ladder
+- name: "Scenario 10: Set a namespace key (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    namespace_keys:
+      - key: "tenant"
+        validation:
+          allowed_values:
+            - "acme"
+            - "globex"
+  check_mode: true
+  register: namespace_key_check
+
+- name: "Scenario 10: Assert set a namespace key (check mode)"
+  ansible.builtin.assert:
+    that:
+      - namespace_key_check is changed
+      - 'namespace_key_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+
+- name: "Scenario 10: Set a namespace key"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    namespace_keys:
+      - key: "tenant"
+        validation:
+          allowed_values:
+            - "acme"
+            - "globex"
+  register: namespace_key_real
+
+- name: "Scenario 10: Assert set a namespace key"
+  ansible.builtin.assert:
+    that:
+      - namespace_key_real is changed
+      - namespace_key_real.msg == "Updated memory " ~ memory_name ~ "."
+      - namespace_key_real.memory.namespace_keys | length == 1
+      - namespace_key_real.memory.namespace_keys[0].key == "tenant"
+      - namespace_key_real.memory.namespace_keys[0].validation.allowed_values == ["acme", "globex"]
+
+- name: "Scenario 10: Set a namespace key (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    namespace_keys:
+      - key: "tenant"
+        validation:
+          allowed_values:
+            - "acme"
+            - "globex"
+  register: namespace_key_rerun
+
+- name: "Scenario 10: Assert set a namespace key (rerun)"
+  ansible.builtin.assert:
+    that:
+      - namespace_key_rerun is not changed
+      - namespace_key_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."

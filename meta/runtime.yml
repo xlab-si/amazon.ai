@@ -2,6 +2,8 @@
 requires_ansible: '>=2.18.0'
 action_groups:
   aws:
+    - bedrock_agentcore_memory
+    - bedrock_agentcore_memory_info
     - bedrock_agentcore_runtime
     - bedrock_agentcore_runtime_info
     - bedrock_agentcore_runtime_endpoint

@@ -1,0 +1,42 @@
+---
+# Scenario 15: an in-flight memory is reported, not acted on, when not waiting
+- name: "Scenario 15: Create a memory without waiting"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_no_wait_name }}"
+    event_expiry_duration: 30
+    wait: false
+  register: no_wait_create
+
+- name: "Scenario 15: Assert create without waiting"
+  ansible.builtin.assert:
+    that:
+      - no_wait_create is changed
+      - no_wait_create.msg == "Created memory " ~ memory_no_wait_name ~ "."
+      - no_wait_create.memory.status == "CREATING"
+
+- name: "Scenario 15: Re-run the create without waiting"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_no_wait_name }}"
+    event_expiry_duration: 30
+    wait: false
+  register: no_wait_rerun
+
+- name: "Scenario 15: Assert the in-flight memory is reported"
+  ansible.builtin.assert:
+    that:
+      - no_wait_rerun is not changed
+      - no_wait_rerun.msg == "Memory " ~ memory_no_wait_name ~ " is currently in CREATING state."
+      - no_wait_rerun.memory.id == no_wait_create.memory.id
+
+- name: "Scenario 15: Delete the in-flight memory, waiting"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_no_wait_name }}"
+    state: absent
+    wait: true
+  register: no_wait_delete
+
+- name: "Scenario 15: Assert delete of the in-flight memory"
+  ansible.builtin.assert:
+    that:
+      - no_wait_delete is changed
+      - no_wait_delete.msg == "Deleted memory " ~ memory_no_wait_name ~ "."

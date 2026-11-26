@@ -1,0 +1,45 @@
+---
+# Scenario 14: delete - ladder
+- name: "Scenario 14: Delete the memory (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    state: absent
+  check_mode: true
+  register: delete_check
+
+- name: "Scenario 14: Assert delete (check mode)"
+  ansible.builtin.assert:
+    that:
+      - delete_check is changed
+      - 'delete_check.msg == "Check mode: would have deleted memory " ~ memory_name ~ "."'
+
+- name: "Scenario 14: Delete the memory"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    state: absent
+  register: delete_real
+
+- name: "Scenario 14: Get the deleted memory"
+  amazon.ai.bedrock_agentcore_memory_info:
+    name: "{{ memory_name }}"
+  register: delete_info
+
+- name: "Scenario 14: Assert delete"
+  ansible.builtin.assert:
+    that:
+      - delete_real is changed
+      - delete_real.msg == "Deleted memory " ~ memory_name ~ "."
+      - delete_real.memory == {}
+      - delete_info.memories == []
+
+- name: "Scenario 14: Delete the memory (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    state: absent
+  register: delete_rerun
+
+- name: "Scenario 14: Assert delete (rerun)"
+  ansible.builtin.assert:
+    that:
+      - delete_rerun is not changed
+      - delete_rerun.msg == "Memory " ~ memory_name ~ " does not exist."

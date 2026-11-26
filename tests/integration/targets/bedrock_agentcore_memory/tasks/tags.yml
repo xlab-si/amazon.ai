@@ -1,0 +1,91 @@
+---
+# Scenario 12: tags - add without purging, then replace with purging - ladders
+- name: "Scenario 12: Add a tag without purging (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    tags:
+      Extra: "one"
+    purge_tags: false
+  check_mode: true
+  register: tag_add_check
+
+- name: "Scenario 12: Assert add a tag without purging (check mode)"
+  ansible.builtin.assert:
+    that:
+      - tag_add_check is changed
+      - 'tag_add_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+      - tag_add_check.memory.tags == memory_tags
+
+- name: "Scenario 12: Add a tag without purging"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    tags:
+      Extra: "one"
+    purge_tags: false
+  register: tag_add_real
+
+- name: "Scenario 12: Assert add a tag without purging"
+  ansible.builtin.assert:
+    that:
+      - tag_add_real is changed
+      - tag_add_real.msg == "Updated memory " ~ memory_name ~ "."
+      - 'tag_add_real.memory.tags == memory_tags | combine({"Extra": "one"})'
+
+- name: "Scenario 12: Add a tag without purging (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    tags:
+      Extra: "one"
+    purge_tags: false
+  register: tag_add_rerun
+
+- name: "Scenario 12: Assert add a tag without purging (rerun)"
+  ansible.builtin.assert:
+    that:
+      - tag_add_rerun is not changed
+      - tag_add_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+
+- name: "Scenario 12: Replace the tags with purging (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    tags:
+      Team: "ai"
+    purge_tags: true
+  check_mode: true
+  register: tag_replace_check
+
+- name: "Scenario 12: Assert replace the tags with purging (check mode)"
+  ansible.builtin.assert:
+    that:
+      - tag_replace_check is changed
+      - 'tag_replace_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+
+- name: "Scenario 12: Replace the tags with purging"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    tags:
+      Team: "ai"
+    purge_tags: true
+  register: tag_replace_real
+
+- name: "Scenario 12: Assert replace the tags with purging"
+  ansible.builtin.assert:
+    that:
+      - tag_replace_real is changed
+      - tag_replace_real.msg == "Updated memory " ~ memory_name ~ "."
+      - 'tag_replace_real.memory.tags == {"Team": "ai"}'
+
+- name: "Scenario 12: Replace the tags with purging (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    tags:
+      Team: "ai"
+    purge_tags: true
+  register: tag_replace_rerun
+
+- name: "Scenario 12: Assert replace the tags with purging (rerun)"
+  ansible.builtin.assert:
+    that:
+      - tag_replace_rerun is not changed
+      - tag_replace_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+      - 'tag_replace_rerun.memory.tags == {"Team": "ai"}'

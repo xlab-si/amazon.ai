@@ -1,0 +1,54 @@
+---
+test_id: "{{ tiny_prefix }}"
+# Memory names must match [a-zA-Z][a-zA-Z0-9_]{0,47}; tiny_prefix may start with a digit.
+memory_name: "test_memory_{{ test_id }}"
+memory_no_wait_name: "test_memory_nowait_{{ test_id }}"
+memory_role_name: "ansible-test-agentcore-memory-role-{{ test_id }}"
+memory_stream_name: "{{ test_id }}-memory-stream"
+# AgentCore validates override model IDs against what the account can invoke in the region. Claude IDs were
+# rejected by UpdateMemory in us-east-1 ("Bedrock model is not available"); first-party Nova passes consistently.
+memory_model_id: "amazon.nova-lite-v1:0"
+
+memory_description: "Integration test memory"
+memory_updated_description: "Integration test memory, updated"
+memory_tags:
+  Environment: "integration-test"
+  Owner: "ansible-test"
+
+semantic_strategy:
+  semantic_memory_strategy:
+    name: "facts"
+    description: "Extracts facts"
+semantic_strategy_updated:
+  semantic_memory_strategy:
+    name: "facts"
+    description: "Extracts facts about the user"
+summary_strategy:
+  summary_memory_strategy:
+    name: "summaries"
+custom_strategy:
+  custom_memory_strategy:
+    name: "product_facts"
+    configuration:
+      semantic_override:
+        extraction:
+          append_to_prompt: "Focus on facts about products the user owns."
+          model_id: "{{ memory_model_id }}"
+        consolidation:
+          append_to_prompt: "Merge facts about the same product."
+          model_id: "{{ memory_model_id }}"
+custom_strategy_updated:
+  custom_memory_strategy:
+    name: "product_facts"
+    configuration:
+      semantic_override:
+        extraction:
+          append_to_prompt: "Focus on facts about products the user owns or wants."
+          model_id: "{{ memory_model_id }}"
+        consolidation:
+          append_to_prompt: "Merge facts about the same product."
+          model_id: "{{ memory_model_id }}"
+# Re-declares the semantic strategy's name under another strategy type.
+semantic_strategy_retyped:
+  summary_memory_strategy:
+    name: "facts"

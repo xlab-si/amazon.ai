@@ -1,0 +1,60 @@
+---
+# Scenario 4: update description and event_expiry_duration - ladder
+- name: "Scenario 4: Update the memory (check mode)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    description: "{{ memory_updated_description }}"
+    event_expiry_duration: 60
+  check_mode: true
+  register: update_check
+
+- name: "Scenario 4: Assert update (check mode)"
+  ansible.builtin.assert:
+    that:
+      - update_check is changed
+      - 'update_check.msg == "Check mode: would have updated memory " ~ memory_name ~ "."'
+      - update_check.memory.description == memory_description
+
+- name: "Scenario 4: Update the memory"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    description: "{{ memory_updated_description }}"
+    event_expiry_duration: 60
+  register: update_real
+
+- name: "Scenario 4: Assert update"
+  ansible.builtin.assert:
+    that:
+      - update_real is changed
+      - update_real.msg == "Updated memory " ~ memory_name ~ "."
+      - update_real.memory.arn == memory_arn
+      - update_real.memory.description == memory_updated_description
+      - update_real.memory.event_expiry_duration == 60
+      - update_real.memory.status == "ACTIVE"
+
+- name: "Scenario 4: Update the memory (rerun)"
+  amazon.ai.bedrock_agentcore_memory:
+    name: "{{ memory_name }}"
+    description: "{{ memory_updated_description }}"
+    event_expiry_duration: 60
+  register: update_rerun
+
+- name: "Scenario 4: Assert update (rerun)"
+  ansible.builtin.assert:
+    that:
+      - update_rerun is not changed
+      - update_rerun.msg == "Memory " ~ memory_name ~ " is already in the desired state."
+
+- name: "Scenario 4: Get the updated memory"
+  amazon.ai.bedrock_agentcore_memory_info:
+    name: "{{ memory_name }}"
+  register: update_info
+
+- name: "Scenario 4: Assert the memory was updated in place"
+  ansible.builtin.assert:
+    that:
+      - update_info.memories | length == 1
+      - update_info.memories[0].arn == memory_arn
+      - update_info.memories[0].status == "ACTIVE"
+      - update_info.memories[0].description == memory_updated_description
+      - update_info.memories[0].event_expiry_duration == 60

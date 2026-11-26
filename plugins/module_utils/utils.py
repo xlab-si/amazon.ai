@@ -252,3 +252,21 @@ def rename_keys(data: Any, renames: Dict[str, str]) -> Any:
     if isinstance(data, list):
         return [rename_keys(item, renames) for item in data]
     return data
+
+
+def is_subset(desired: Any, current: Any) -> bool:
+    """
+    Report whether ``desired`` is contained in ``current``.
+
+    Dicts match when every desired key is present in current with a subset value, lists when they
+    have the same length and are pairwise subsets, and anything else on equality.
+    """
+    if isinstance(desired, dict):
+        if not isinstance(current, dict):
+            return False
+        return all(key in current and is_subset(value, current[key]) for key, value in desired.items())
+    if isinstance(desired, list):
+        if not isinstance(current, list) or len(desired) != len(current):
+            return False
+        return all(is_subset(d, c) for d, c in zip(desired, current))
+    return desired == current
